@@ -336,25 +336,17 @@ def role_advice_and_rules(day2: bool, improve_list: List[int]):
 def net_targets_text() -> str:
     par = PAR[hole_idx]
     return f"Par {par}. Strokes — Matt: {matt_strokes}, Mike: {mike_strokes}. Matt bogey often equals net {par}."
-# === CORE LOGIC END ==========================================================
-
-
-st.markdown("""
-st.markdown('<div class="sticky-reco">', unsafe_allow_html=True)
-st.markdown(f"**Hole {hole}** (Par {PAR[hole_idx]}, HCP {HOLE_HANDICAP[hole_idx]})")
-st.markdown("### Live Recommendation")
-st.write(rec)
-st.caption(net_targets_text())
 st.markdown('</div>', unsafe_allow_html=True)
 st.markdown("---")
 st.markdown("---")
 c1, c2 = st.columns(2, gap="large")
+c1, c2 = st.columns(2, gap="large")
 def scroll_to_top_js():
-    st.components.v1.html("""
+    st.components.v1.html('''
     <script>
-    window.scrollTo({top: 0, behavior: 'smooth'});
+    window.scrollTo({top: 0, behavior: "smooth"});
     </script>
-    """, height=0)
+    ''', height=0)
 
 with c1:
     st.markdown("#### Matt", unsafe_allow_html=True)
