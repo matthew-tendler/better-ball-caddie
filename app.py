@@ -58,7 +58,7 @@ MIKE_W = [0.55, 0.55, 0.85, 0.55, 0.55, 0.55, 0.55, 0.55, 0.30,
 
 
 # === TOP RECOMMENDATION (MOBILE FIRST) ======================================
-st.title("Better-Ball Caddie for MKCC")
+st.markdown("### Better-Ball Caddie for MKCC")
 st.caption("Grade each shot A/B/C/D/F. Live tactics are handicap-aware and hole-smart.")
 
 with st.expander("How to use this app"):
