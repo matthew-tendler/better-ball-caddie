@@ -126,10 +126,14 @@ def expected_net_advantage(attacker: str, safe_ball: bool, day2_bias: bool) -> f
     base = w * 0.35
     if day2_bias: base += 0.25
     if safe_ball: base += 0.20
-    base += (0.05 if strokes > 0 else -0.05)
-    risk = 0.15 * min(streak, 3)
-    if not safe_ball: risk += 0.20
+    base += (0.05 if strokes > 0 else -0.05)  # slight boost if receiving a stroke
+    risk = 0.15 * min(streak, 3)              # rising risk with bad streak
+    if not safe_ball: risk += 0.20            # no safety net → conservative
     return round(base - risk, 2)
+
+def is_deadband(ev: float) -> bool:
+    """Treat near-zero EV as 'no clear edge' (avoid fake precision)."""
+    return -0.05 <= ev <= 0.05
 
 def role_advice_and_rules(day2: bool, improve_list: List[int]):
     """Return (recommendation, rules, EV, attacker, smart_peek_dict)."""
@@ -160,10 +164,13 @@ def role_advice_and_rules(day2: bool, improve_list: List[int]):
         if first_rating >= SAFE_SCORE:
             rules.append(f"{first_who} safe (≥B).")
             ev = expected_net_advantage(other_who, safe_ball=True, day2_bias=day2_bias)
-            downgrade = ((other_who == "Matt" and matt_bad_run >= BAD_STREAK_THRESHOLD)
-                         or (other_who == "Mike" and mike_bad_run >= BAD_STREAK_THRESHOLD) or ev <= 0)
+            downgrade = (
+                (other_who == "Matt" and matt_bad_run >= BAD_STREAK_THRESHOLD)
+                or (other_who == "Mike" and mike_bad_run >= BAD_STREAK_THRESHOLD)
+                or ev <= 0 or is_deadband(ev)
+            )
             if downgrade:
-                rules.append(f"{other_who} attack downgraded (bad-streak or EV≤0).")
+                rules.append(f"{other_who} attack downgraded (bad-streak or EV≤0 or deadband).")
                 smart_peek = dict(attacker=other_who, ev=ev, safe="Yes", matt_w=MATT_W[hole_idx], mike_w=MIKE_W[hole_idx])
                 return (f"{first_who} is safe. {other_who}: controlled target; no hero shots.",
                         rules, ev, other_who, smart_peek)
@@ -180,7 +187,7 @@ def role_advice_and_rules(day2: bool, improve_list: List[int]):
         rules.append(f"{first_who} average (C).")
         ev = expected_net_advantage(other_who, safe_ball=False, day2_bias=day2_bias)
         smart_peek = dict(attacker=other_who, ev=ev, safe="No", matt_w=MATT_W[hole_idx], mike_w=MIKE_W[hole_idx])
-        if ev <= 0:
+        if ev <= 0 or is_deadband(ev):
             return (f"{first_who} is average. {other_who}: conservative line; favor fairway/center.",
                     rules, ev, other_who, smart_peek)
         return (f"{first_who} is average. {other_who}: medium risk line toward best angle.",
@@ -199,8 +206,8 @@ def role_advice_and_rules(day2: bool, improve_list: List[int]):
             smart_peek = dict(attacker=attacker, ev=ev, safe="Yes", matt_w=MATT_W[hole_idx], mike_w=MIKE_W[hole_idx])
 
             bad_run = bad_streak(matt_shots) if attacker == "Matt" else bad_streak(mike_shots)
-            if bad_run >= BAD_STREAK_THRESHOLD or ev <= 0:
-                rules.append(f"{attacker} attack downgraded (bad-streak or EV≤0).")
+            if bad_run >= BAD_STREAK_THRESHOLD or ev <= 0 or is_deadband(ev):
+                rules.append(f"{attacker} attack downgraded (bad-streak or EV≤0 or deadband).")
                 return (f"Team has a safe ball. {attacker}: controlled target. {partner}: easy two-putt.",
                         rules, ev, attacker, smart_peek)
             return (f"Team has a safe ball. {attacker}: ATTACK. {partner}: easy two-putt.",
@@ -218,7 +225,7 @@ def role_advice_and_rules(day2: bool, improve_list: List[int]):
         ev = expected_net_advantage(attacker, safe_ball=False, day2_bias=day2_bias)
         smart_peek = dict(attacker=attacker, ev=ev, safe="No", matt_w=MATT_W[hole_idx], mike_w=MIKE_W[hole_idx])
         rules.append("Mixed tee outcomes; attacker chosen by grades + hole strength.")
-        if ev <= 0:
+        if ev <= 0 or is_deadband(ev):
             return (f"Mixed results. Favor {attacker}'s lie but avoid high-risk lines; set up inside-15 ft if easy.",
                     rules, ev, attacker, smart_peek)
         return (f"Mixed results. Favor {attacker}'s lie; attacker aims for inside-15 ft.",
@@ -233,7 +240,7 @@ def role_advice_and_rules(day2: bool, improve_list: List[int]):
         rules.append("Matt safe; Mike not safe.")
         ev = expected_net_advantage("Mike", safe_ball=True, day2_bias=day2_bias)
         smart_peek = dict(attacker="Mike", ev=ev, safe="Yes", matt_w=MATT_W[hole_idx], mike_w=MIKE_W[hole_idx])
-        if bad_streak(mike_shots) >= BAD_STREAK_THRESHOLD or ev <= 0:
+        if bad_streak(mike_shots) >= BAD_STREAK_THRESHOLD or ev <= 0 or is_deadband(ev):
             rules.append("Mike attack downgraded.")
             return ("Matt is safe. Mike: smart center-green. Matt: avoid short-siding.",
                     rules, ev, "Mike", smart_peek)
@@ -244,7 +251,7 @@ def role_advice_and_rules(day2: bool, improve_list: List[int]):
         rules.append("Mike safe; Matt not safe.")
         ev = expected_net_advantage("Matt", safe_ball=True, day2_bias=day2_bias)
         smart_peek = dict(attacker="Matt", ev=ev, safe="Yes", matt_w=MATT_W[hole_idx], mike_w=MIKE_W[hole_idx])
-        if bad_streak(matt_shots) >= BAD_STREAK_THRESHOLD or ev <= 0:
+        if bad_streak(matt_shots) >= BAD_STREAK_THRESHOLD or ev <= 0 or is_deadband(ev):
             rules.append("Matt attack downgraded to damage control.")
             return ("Mike is safe. Matt: stop chasing par; advance; avoid hazard.",
                     rules, ev, "Matt", smart_peek)
@@ -256,7 +263,7 @@ def role_advice_and_rules(day2: bool, improve_list: List[int]):
         attacker = choose_attacker_candidate(m_last, k_last)
         ev = expected_net_advantage(attacker, safe_ball=True, day2_bias=day2_bias)
         smart_peek = dict(attacker=attacker, ev=ev, safe="Yes", matt_w=MATT_W[hole_idx], mike_w=MIKE_W[hole_idx])
-        if ev <= 0:
+        if ev <= 0 or is_deadband(ev):
             return ("Both are safe. Choose best birdie look; both play controlled lines.",
                     rules, ev, attacker, smart_peek)
         return ("Both are safe. Choose best birdie look; one flag-hunts, the other locks par.",
@@ -273,21 +280,32 @@ def net_targets_text() -> str:
 # === CORE LOGIC END ==========================================================
 
 
-# === TOP OUTPUT (Recommendation first) =======================================
+# === TOP OUTPUT (Recommendation first, sticky) ===============================
 rec, rules, ev, attacker, peek = role_advice_and_rules(day2, improve_list)
 
+st.markdown("""
+<style>
+.sticky-reco {
+  position: sticky; top: 0; z-index: 999;
+  background: white; padding: 10px 12px; border-bottom: 1px solid #eee;
+}
+.sticky-reco h3 { margin: 0 0 6px 0; }
+.grade-grid {display:grid; grid-template-columns:repeat(5,1fr); gap:10px;}
+</style>
+""", unsafe_allow_html=True)
+
+st.markdown('<div class="sticky-reco">', unsafe_allow_html=True)
 st.markdown("### Live Recommendation")
 st.write(rec)
-
-# Always-on mini explainability (no expand needed)
 st.caption(
     "Smart Peek · "
     f"Attacker: **{peek.get('attacker') or '—'}** · "
     f"EV(Attack−Anchor): **{peek.get('ev'):+.2f}** · "
-    f"Safe ball now: **{peek.get('safe')}** · "
+    f"Safe ball: **{peek.get('safe')}** · "
     f"Hole strength — Matt **{peek.get('matt_w'):.2f}**, Mike **{peek.get('mike_w'):.2f}** · "
     f"{net_targets_text()}"
 )
+st.markdown('</div>', unsafe_allow_html=True)
 
 with st.expander("Why this? (full explainability)"):
     st.markdown("- **Hole**: {} (Par {}, HCP {})".format(hole, PAR[hole_idx], HOLE_HANDICAP[hole_idx]))
@@ -307,12 +325,6 @@ with st.expander("Why this? (full explainability)"):
 st.markdown("---")
 
 # === SHOT ENTRY UI (buttons call st.rerun for instant top update) ===========
-st.markdown("""
-<style>
-.grade-grid {display:grid; grid-template-columns:repeat(5,1fr); gap:10px;}
-</style>
-""", unsafe_allow_html=True)
-
 c1, c2 = st.columns(2, gap="large")
 with c1:
     st.markdown("### Matt — grade this shot")
