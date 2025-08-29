@@ -57,7 +57,30 @@ MIKE_W = [0.55, 0.55, 0.85, 0.55, 0.55, 0.55, 0.55, 0.55, 0.30,
 # === CONFIG END ===============================================================
 
 
-# === TOP RECOMMENDATION (MOBILE FIRST) ======================================
+
+# === SESSION STATE & HOLE INIT (must come first for mobile UI) ===
+if "hole" not in st.session_state:
+    st.session_state["hole"] = 1
+hole = st.session_state["hole"]
+
+# Per-hole state arrays
+if f"matt_{hole}" not in st.session_state: st.session_state[f"matt_{hole}"] = []
+if f"mike_{hole}" not in st.session_state: st.session_state[f"mike_{hole}"] = []
+matt_shots = st.session_state[f"matt_{hole}"]
+mike_shots = st.session_state[f"mike_{hole}"]
+
+hole_idx = hole - 1
+
+# Sidebar values (set in session state for top UI use)
+matt_hcp = st.session_state.get("matt_hcp", 19)
+mike_hcp = st.session_state.get("mike_hcp", 13)
+day2 = st.session_state.get("day2", False)
+improve_list = st.session_state.get("improve_list", [])
+matt_strokes = strokes_for(matt_hcp, hole_idx)
+mike_strokes = strokes_for(mike_hcp, hole_idx)
+
+# Recommendation logic
+rec, rules, ev, attacker, peek = role_advice_and_rules(day2, improve_list)
 
 # --- MOBILE-FIRST HEADER & NAVIGATION ---
 st.markdown("<h4 style='margin-bottom:0.2em;'>Better-Ball Caddie for MKCC</h4>", unsafe_allow_html=True)
