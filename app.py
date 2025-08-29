@@ -260,8 +260,20 @@ def scroll_to_top_js():
     ''', height=0)
 
 
-# --- MOBILE-FIRST HEADER & NAVIGATION ---
+
+
+# --- MOBILE-FIRST HEADER & LIVE RECOMMENDATION ---
 st.markdown("<h4 style='margin-bottom:0.2em;'>Better-Ball Caddie for MKCC</h4>", unsafe_allow_html=True)
+
+# Compute recommendation after grading UI, before displaying it
+rec, rules, ev, attacker, peek = role_advice_and_rules(day2, improve_list)
+
+# Live Recommendation (smaller text, right under title)
+st.markdown("<div class='sticky-reco' style='font-size:1.05em;'>", unsafe_allow_html=True)
+st.markdown("#### Live Recommendation", unsafe_allow_html=True)
+st.write(rec)
+st.caption(net_targets_text())
+st.markdown('</div>', unsafe_allow_html=True)
 
 # Next/Prev buttons at top for thumb reach
 bprev, bnext = st.columns(2)
@@ -309,15 +321,6 @@ with c2:
     st.markdown('</div>', unsafe_allow_html=True)
     st.write("Mike shots:", " ".join(SCORE_TO_GRADE[s] for s in mike_shots) or "—")
 
-# Now update the recommendation after any grading
-rec, rules, ev, attacker, peek = role_advice_and_rules(day2, improve_list)
-
-# Live Recommendation (smaller text)
-st.markdown("<div class='sticky-reco' style='font-size:1.05em;'>", unsafe_allow_html=True)
-st.markdown("#### Live Recommendation", unsafe_allow_html=True)
-st.write(rec)
-st.caption(net_targets_text())
-st.markdown('</div>', unsafe_allow_html=True)
 
 # Keep “hole” in session for big buttons + slider to stay in sync
 if "hole" not in st.session_state:
