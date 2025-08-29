@@ -63,6 +63,8 @@ if "hole" not in st.session_state:
     st.session_state["hole"] = 1
 hole = st.session_state["hole"]
 
+hole_idx = hole - 1
+
 # Per-hole state arrays
 if f"matt_{hole}" not in st.session_state: st.session_state[f"matt_{hole}"] = []
 if f"mike_{hole}" not in st.session_state: st.session_state[f"mike_{hole}"] = []
@@ -78,6 +80,184 @@ day2 = st.session_state.get("day2", False)
 improve_list = st.session_state.get("improve_list", [])
 matt_strokes = strokes_for(matt_hcp, hole_idx)
 mike_strokes = strokes_for(mike_hcp, hole_idx)
+
+# === CORE LOGIC (must be defined before UI code) ===
+def choose_attacker_candidate(m_last: int | None, k_last: int | None) -> str:
+    """Pick attacker using last grades + per-hole strengths + bad streak penalty."""
+    m_bad = bad_streak(matt_shots)
+    k_bad = bad_streak(mike_shots)
+    m_score = (m_last or 0) + MATT_W[hole_idx]*0.6 - m_bad*0.4
+    k_score = (k_last or 0) + MIKE_W[hole_idx]*0.6 - k_bad*0.4
+    return "Matt" if m_score >= k_score else "Mike"
+
+def expected_net_advantage(attacker: str, safe_ball: bool, day2_bias: bool) -> float:
+    """Heuristic EV(ATTACK − ANCHOR). Positive favors ATTACK."""
+    if attacker == "Matt":
+        w = MATT_W[hole_idx]; streak = bad_streak(matt_shots); strokes = matt_strokes
+    else:
+        w = MIKE_W[hole_idx]; streak = bad_streak(mike_shots); strokes = mike_strokes
+
+    base = w * 0.35
+    if day2_bias: base += 0.25
+    if safe_ball: base += 0.20
+    base += (0.05 if strokes > 0 else -0.05)  # slight boost if receiving a stroke
+    risk = 0.15 * min(streak, 3)              # rising risk with bad streak
+    if not safe_ball: risk += 0.20            # no safety net → conservative
+    return round(base - risk, 2)
+
+def is_deadband(ev: float) -> bool:
+    """Treat near-zero EV as 'no clear edge' (avoid fake precision)."""
+    return -0.05 <= ev <= 0.05
+
+def role_advice_and_rules(day2: bool, improve_list: List[int]):
+    """Return (recommendation, rules, EV, attacker, smart_peek_dict)."""
+    rules = []
+    m1 = last(matt_shots); k1 = last(mike_shots)
+
+    # Bad-streak guardrails
+    matt_bad_run = bad_streak(matt_shots); mike_bad_run = bad_streak(mike_shots)
+    if matt_bad_run >= BAD_STREAK_THRESHOLD: rules.append(f"Matt bad streak {matt_bad_run} → no green light.")
+    if mike_bad_run >= BAD_STREAK_THRESHOLD: rules.append(f"Mike bad streak {mike_bad_run} → no green light.")
+
+    # Tee order: prefer strokes/comfort to secure a safe ball early
+    if len(matt_shots) == 0 and len(mike_shots) == 0:
+        matt_pref = (matt_strokes > mike_strokes) or (MATT_W[hole_idx] > MIKE_W[hole_idx])
+        who_first = "Matt" if matt_pref else "Mike"
+        rules.append(f"Tee order by strokes/comfort → {who_first} tees first.")
+        smart_peek = dict(attacker=None, ev=0.0, safe="N/A", matt_w=MATT_W[hole_idx], mike_w=MIKE_W[hole_idx])
+        return (f"{who_first} tees first. First player: put a ball in play. Partner adjusts based on result.",
+                rules, 0.0, None, smart_peek)
+
+    # One tee shot taken
+    if len(matt_shots) + len(mike_shots) == 1:
+        first_who = "Matt" if len(matt_shots) else "Mike"
+        first_rating = m1 if len(matt_shots) else k1
+        other_who = "Mike" if first_who == "Matt" else "Matt"
+        day2_bias = day2 and (hole in improve_list)
+
+        if first_rating >= SAFE_SCORE:
+            rules.append(f"{first_who} safe (≥B).")
+            ev = expected_net_advantage(other_who, safe_ball=True, day2_bias=day2_bias)
+            downgrade = (
+                (other_who == "Matt" and matt_bad_run >= BAD_STREAK_THRESHOLD)
+                or (other_who == "Mike" and mike_bad_run >= BAD_STREAK_THRESHOLD)
+                or ev <= 0 or is_deadband(ev)
+            )
+            if downgrade:
+                rules.append(f"{other_who} attack downgraded (bad-streak or EV≤0 or deadband).")
+                smart_peek = dict(attacker=other_who, ev=ev, safe="Yes", matt_w=MATT_W[hole_idx], mike_w=MIKE_W[hole_idx])
+                return (f"{first_who} is safe. {other_who}: controlled target; no hero shots.",
+                        rules, ev, other_who, smart_peek)
+            smart_peek = dict(attacker=other_who, ev=ev, safe="Yes", matt_w=MATT_W[hole_idx], mike_w=MIKE_W[hole_idx])
+            return (f"{first_who} is safe. {other_who}: ATTACK for a birdie look.",
+                    rules, ev, other_who, smart_peek)
+
+        if first_rating <= BAD_SCORE:
+            rules.append(f"{first_who} in trouble (≤D).")
+            smart_peek = dict(attacker=None, ev=0.0, safe="No", matt_w=MATT_W[hole_idx], mike_w=MIKE_W[hole_idx])
+            return (f"{first_who} is in trouble. {other_who}: ANCHOR (fairway finder; center green).",
+                    rules, 0.0, None, smart_peek)
+
+        rules.append(f"{first_who} average (C).")
+        ev = expected_net_advantage(other_who, safe_ball=False, day2_bias=day2_bias)
+        smart_peek = dict(attacker=other_who, ev=ev, safe="No", matt_w=MATT_W[hole_idx], mike_w=MIKE_W[hole_idx])
+        if ev <= 0 or is_deadband(ev):
+            return (f"{first_who} is average. {other_who}: conservative line; favor fairway/center.",
+                    rules, ev, other_who, smart_peek)
+        return (f"{first_who} is average. {other_who}: medium risk line toward best angle.",
+                rules, ev, other_who, smart_peek)
+
+    # Both tee shots hit
+    if len(matt_shots) == 1 and len(mike_shots) == 1:
+        day2_bias = day2 and (hole in improve_list)
+        safe_balls = sum(1 for r in [m1, k1] if r is not None and r >= SAFE_SCORE)
+
+        if safe_balls >= 1:
+            rules.append("At least one safe tee ball.")
+            attacker = choose_attacker_candidate(m1, k1)
+            ev = expected_net_advantage(attacker, safe_ball=True, day2_bias=day2_bias)
+            partner = "Mike" if attacker == "Matt" else "Matt"
+            smart_peek = dict(attacker=attacker, ev=ev, safe="Yes", matt_w=MATT_W[hole_idx], mike_w=MIKE_W[hole_idx])
+
+            bad_run = bad_streak(matt_shots) if attacker == "Matt" else bad_streak(mike_shots)
+            if bad_run >= BAD_STREAK_THRESHOLD or ev <= 0 or is_deadband(ev):
+                rules.append(f"{attacker} attack downgraded (bad-streak or EV≤0 or deadband).")
+                return (f"Team has a safe ball. {attacker}: controlled target. {partner}: easy two-putt.",
+                        rules, ev, attacker, smart_peek)
+            return (f"Team has a safe ball. {attacker}: ATTACK. {partner}: easy two-putt.",
+                    rules, ev, attacker, smart_peek)
+
+        if (m1 or 0) <= BAD_SCORE and (k1 or 0) <= BAD_SCORE:
+            better_who = "Matt" if (m1 or 0) >= (k1 or 0) else "Mike"
+            rules.append("Both tee balls in trouble.")
+            smart_peek = dict(attacker=better_who, ev=0.0, safe="No", matt_w=MATT_W[hole_idx], mike_w=MIKE_W[hole_idx])
+            return (f"Both in trouble. Play from {better_who}'s better lie. Advance safely; protect bogey "
+                    f"(often net par for Matt on stroke holes).",
+                    rules, 0.0, better_who, smart_peek)
+
+        attacker = choose_attacker_candidate(m1, k1)
+        ev = expected_net_advantage(attacker, safe_ball=False, day2_bias=day2_bias)
+        smart_peek = dict(attacker=attacker, ev=ev, safe="No", matt_w=MATT_W[hole_idx], mike_w=MIKE_W[hole_idx])
+        rules.append("Mixed tee outcomes; attacker chosen by grades + hole strength.")
+        if ev <= 0 or is_deadband(ev):
+            return (f"Mixed results. Favor {attacker}'s lie but avoid high-risk lines; set up inside-15 ft if easy.",
+                    rules, ev, attacker, smart_peek)
+        return (f"Mixed results. Favor {attacker}'s lie; attacker aims for inside-15 ft.",
+                rules, ev, attacker, smart_peek)
+
+    # Approaches and beyond
+    m_last = (last(matt_shots) or 0); k_last = (last(mike_shots) or 0)
+    matt_safe = m_last >= SAFE_SCORE; mike_safe = k_last >= SAFE_SCORE
+    day2_bias = day2 and (hole in improve_list)
+
+    if matt_safe and not mike_safe:
+        rules.append("Matt safe; Mike not safe.")
+        ev = expected_net_advantage("Mike", safe_ball=True, day2_bias=day2_bias)
+        smart_peek = dict(attacker="Mike", ev=ev, safe="Yes", matt_w=MATT_W[hole_idx], mike_w=MIKE_W[hole_idx])
+        if bad_streak(mike_shots) >= BAD_STREAK_THRESHOLD or ev <= 0 or is_deadband(ev):
+            rules.append("Mike attack downgraded.")
+            return ("Matt is safe. Mike: smart center-green. Matt: avoid short-siding.",
+                    rules, ev, "Mike", smart_peek)
+        return ("Matt is safe. Mike: ATTACK pin if angle allows. Matt: avoid short-siding.",
+                rules, ev, "Mike", smart_peek)
+
+    if mike_safe and not matt_safe:
+        rules.append("Mike safe; Matt not safe.")
+        ev = expected_net_advantage("Matt", safe_ball=True, day2_bias=day2_bias)
+        smart_peek = dict(attacker="Matt", ev=ev, safe="Yes", matt_w=MATT_W[hole_idx], mike_w=MIKE_W[hole_idx])
+        if bad_streak(matt_shots) >= BAD_STREAK_THRESHOLD or ev <= 0 or is_deadband(ev):
+            rules.append("Matt attack downgraded to damage control.")
+            return ("Mike is safe. Matt: stop chasing par; advance; avoid hazard.",
+                    rules, ev, "Matt", smart_peek)
+        return ("Mike is safe. Matt: ATTACK with freedom. Mike: easy two-putt for par.",
+                rules, ev, "Matt", smart_peek)
+
+    if mike_safe and matt_safe:
+        rules.append("Both safe.")
+        attacker = choose_attacker_candidate(m_last, k_last)
+        ev = expected_net_advantage(attacker, safe_ball=True, day2_bias=day2_bias)
+        smart_peek = dict(attacker=attacker, ev=ev, safe="Yes", matt_w=MATT_W[hole_idx], mike_w=MIKE_W[hole_idx])
+        if ev <= 0 or is_deadband(ev):
+            return ("Both are safe. Choose best birdie look; both play controlled lines.",
+                    rules, ev, attacker, smart_peek)
+        return ("Both are safe. Choose best birdie look; one flag-hunts, the other locks par.",
+                rules, ev, attacker, smart_peek)
+
+    rules.append("No one safe yet → damage-control bias.")
+    smart_peek = dict(attacker=None, ev=0.0, safe="No", matt_w=MATT_W[hole_idx], mike_w=MIKE_W[hole_idx])
+    return ("Neither is safe yet. Advance to comfortable yardage; prioritize bogey (often net par for Matt on stroke holes).",
+            rules, 0.0, None, smart_peek)
+
+def net_targets_text() -> str:
+    par = PAR[hole_idx]
+    return f"Par {par}. Strokes — Matt: {matt_strokes}, Mike: {mike_strokes}. Matt bogey often equals net {par}."
+
+def scroll_to_top_js():
+    st.components.v1.html('''
+    <script>
+    window.scrollTo({top: 0, behavior: "smooth"});
+    </script>
+    ''', height=0)
 
 # Recommendation logic
 rec, rules, ev, attacker, peek = role_advice_and_rules(day2, improve_list)
