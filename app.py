@@ -339,22 +339,7 @@ def net_targets_text() -> str:
 # === CORE LOGIC END ==========================================================
 
 
-# === TOP OUTPUT (Recommendation first, sticky) ===============================
-rec, rules, ev, attacker, peek = role_advice_and_rules(day2, improve_list)
-
 st.markdown("""
-<style>
-.sticky-reco {
-  position: sticky; top: 0; z-index: 999;
-  background: white; padding: 10px 12px; border-bottom: 1px solid #eee;
-}
-.sticky-reco h3 { margin: 0 0 6px 0; }
-.grade-grid {display:grid; grid-template-columns:repeat(5,1fr); gap:10px;}
-</style>
-""", unsafe_allow_html=True)
-
-
-
 st.markdown('<div class="sticky-reco">', unsafe_allow_html=True)
 st.markdown(f"**Hole {hole}** (Par {PAR[hole_idx]}, HCP {HOLE_HANDICAP[hole_idx]})")
 st.markdown("### Live Recommendation")
@@ -363,9 +348,6 @@ st.caption(net_targets_text())
 st.markdown('</div>', unsafe_allow_html=True)
 st.markdown("---")
 st.markdown("---")
-
-
-# --- SHOT ENTRY UI (mobile-friendly) ---
 c1, c2 = st.columns(2, gap="large")
 def scroll_to_top_js():
     st.components.v1.html("""
@@ -412,11 +394,8 @@ with st.expander("Why this? (full explainability)"):
             st.markdown(f"  - {r}")
     else:
         st.markdown("  - (none yet)")
-
-# Bottom navigation (big targets)
 bprev, bnext = st.columns(2)
 if bprev.button("◀ Prev Hole", use_container_width=True, key=f"bprev_{hole}"):
     st.session_state["hole"] = max(1, hole - 1); st.rerun()
 if bnext.button("Next Hole ▶", use_container_width=True, key=f"bnext_{hole}"):
     st.session_state["hole"] = min(18, hole + 1); st.rerun()
-# === SHOT ENTRY UI END =======================================================
