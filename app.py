@@ -302,25 +302,22 @@ st.markdown("### Live Recommendation")
 st.write(rec)
 st.caption(net_targets_text())
 st.markdown('</div>', unsafe_allow_html=True)
+st.markdown("---")
 
-with st.expander("Why this? (full explainability)"):
-    st.markdown("- **Hole**: {} (Par {}, HCP {})".format(hole, PAR[hole_idx], HOLE_HANDICAP[hole_idx]))
-    st.markdown("- **Matt grades**: {}".format(" ".join(SCORE_TO_GRADE[s] for s in matt_shots) or "—"))
-    st.markdown("- **Mike grades**: {}".format(" ".join(SCORE_TO_GRADE[s] for s in mike_shots) or "—"))
-    st.markdown("- **Per-hole strength**: Matt {:.2f} · Mike {:.2f}".format(MATT_W[hole_idx], MIKE_W[hole_idx]))
-    st.markdown("- **Day-2 mode**: {} · Improve: {}".format("ON" if day2 else "OFF", improve_list or "—"))
-    st.markdown("- **Expected Net Advantage (ATTACK vs ANCHOR)**: **{:+.2f}**{}".format(
-        ev, f" for {attacker}" if attacker else ""))
-    st.markdown("- **Rules fired**:")
-    if rules:
-        for r in rules:
-            st.markdown(f"  - {r}")
-    else:
-        st.markdown("  - (none yet)")
+st.markdown("""
+#### How to Use
+Grade each shot for both players using the A/B/C/D/F buttons below. The app instantly gives live, hole-specific recommendations for your team, factoring in:
+- **Handicaps** and per-hole stroke allocation
+- **Per-hole strengths** for each player (based on your tendencies)
+- **Recent shot grades** (bad streaks trigger damage control)
+- **Day-2 Ringer mode** for extra aggression on holes you want to improve
+- **Who is safe** after each shot, and who should attack or anchor
+
+The advice updates after every shot, helping you optimize team strategy in real time.
+""")
 
 st.markdown("---")
 
-# === SHOT ENTRY UI (buttons call st.rerun for instant top update) ===========
 c1, c2 = st.columns(2, gap="large")
 with c1:
     st.markdown("### Matt — grade your last shot")
@@ -339,6 +336,23 @@ with c2:
             mike_shots.append(GRADE_TO_SCORE[g]); st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
     st.write("Mike shots:", " ".join(SCORE_TO_GRADE[s] for s in mike_shots) or "—")
+
+st.markdown("---")
+
+with st.expander("Why this? (full explainability)"):
+    st.markdown("- **Hole**: {} (Par {}, HCP {})".format(hole, PAR[hole_idx], HOLE_HANDICAP[hole_idx]))
+    st.markdown("- **Matt grades**: {}".format(" ".join(SCORE_TO_GRADE[s] for s in matt_shots) or "—"))
+    st.markdown("- **Mike grades**: {}".format(" ".join(SCORE_TO_GRADE[s] for s in mike_shots) or "—"))
+    st.markdown("- **Per-hole strength**: Matt {:.2f} · Mike {:.2f}".format(MATT_W[hole_idx], MIKE_W[hole_idx]))
+    st.markdown("- **Day-2 mode**: {} · Improve: {}".format("ON" if day2 else "OFF", improve_list or "—"))
+    st.markdown("- **Expected Net Advantage (ATTACK vs ANCHOR)**: **{:+.2f}**{}".format(
+        ev, f" for {attacker}" if attacker else ""))
+    st.markdown("- **Rules fired**:")
+    if rules:
+        for r in rules:
+            st.markdown(f"  - {r}")
+    else:
+        st.markdown("  - (none yet)")
 
 # Bottom navigation (big targets)
 bprev, bnext = st.columns(2)
