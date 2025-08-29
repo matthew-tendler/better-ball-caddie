@@ -295,6 +295,11 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
+st.markdown('<div class="sticky-reco">', unsafe_allow_html=True)
+st.markdown("### Live Recommendation")
+st.write(rec)
+st.caption(net_targets_text())
+st.markdown('</div>', unsafe_allow_html=True)
 
 with st.expander("Why this? (full explainability)"):
     st.markdown("- **Hole**: {} (Par {}, HCP {})".format(hole, PAR[hole_idx], HOLE_HANDICAP[hole_idx]))
