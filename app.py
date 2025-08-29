@@ -259,8 +259,6 @@ def scroll_to_top_js():
     </script>
     ''', height=0)
 
-# Recommendation logic
-rec, rules, ev, attacker, peek = role_advice_and_rules(day2, improve_list)
 
 # --- MOBILE-FIRST HEADER & NAVIGATION ---
 st.markdown("<h4 style='margin-bottom:0.2em;'>Better-Ball Caddie for MKCC</h4>", unsafe_allow_html=True)
@@ -277,28 +275,49 @@ if bnext.button("Next Hole ▶", use_container_width=True, key=f"bnext_{hole}"):
 # Current hole info
 st.markdown(f"<div style='font-size:1.1em; margin-bottom:0.5em;'><b>Hole {hole}</b> (Par {PAR[hole_idx]}, HCP {HOLE_HANDICAP[hole_idx]})</div>", unsafe_allow_html=True)
 
+# Helper text (reduced margin for less whitespace)
+st.markdown("<div style='font-size:0.98em; color:#555; margin-bottom:0.15em;'>After you hit, grade your shot</div>", unsafe_allow_html=True)
+
+# --- SHOT ENTRY UI (mobile-friendly) ---
+c1, c2 = st.columns(2, gap="large")
+def scroll_to_top_js():
+    st.components.v1.html('''
+    <script>
+    window.scrollTo({top: 0, behavior: "smooth"});
+    </script>
+    ''', height=0)
+
+with c1:
+    st.markdown("#### Matt", unsafe_allow_html=True)
+    st.markdown('<div class="grade-grid">', unsafe_allow_html=True)
+    for g in ["A","B","C","D","F"]:
+        if st.button(g, key=f"matt_{hole}_{g}", help=GRADE_HELP[g], use_container_width=True):
+            matt_shots.append(GRADE_TO_SCORE[g])
+            scroll_to_top_js()
+            st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
+    st.write("Matt shots:", " ".join(SCORE_TO_GRADE[s] for s in matt_shots) or "—")
+
+with c2:
+    st.markdown("#### Mike", unsafe_allow_html=True)
+    st.markdown('<div class="grade-grid">', unsafe_allow_html=True)
+    for g in ["A","B","C","D","F"]:
+        if st.button(g, key=f"mike_{hole}_{g}", help=GRADE_HELP[g], use_container_width=True):
+            mike_shots.append(GRADE_TO_SCORE[g])
+            scroll_to_top_js()
+            st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
+    st.write("Mike shots:", " ".join(SCORE_TO_GRADE[s] for s in mike_shots) or "—")
+
+# Now update the recommendation after any grading
+rec, rules, ev, attacker, peek = role_advice_and_rules(day2, improve_list)
+
 # Live Recommendation (smaller text)
 st.markdown("<div class='sticky-reco' style='font-size:1.05em;'>", unsafe_allow_html=True)
 st.markdown("#### Live Recommendation", unsafe_allow_html=True)
 st.write(rec)
 st.caption(net_targets_text())
 st.markdown('</div>', unsafe_allow_html=True)
-
-# Helper text
-st.markdown("<div style='font-size:0.98em; color:#555; margin-bottom:0.7em;'>After you hit, grade your shot</div>", unsafe_allow_html=True)
-
-# How to use (expander, still available but not prominent)
-with st.expander("How to use this app"):
-    st.markdown("""
-    Grade each shot for both players using the A/B/C/D/F buttons below. The app instantly gives live, hole-specific recommendations for your team, factoring in:
-    - **Handicaps** and per-hole stroke allocation
-    - **Per-hole strengths** for each player (based on your tendencies)
-    - **Recent shot grades** (bad streaks trigger damage control)
-    - **Day-2 Ringer mode** for extra aggression on holes you want to improve
-    - **Who is safe** after each shot, and who should attack or anchor
-
-    The advice updates after every shot, helping you optimize team strategy in real time.
-    """)
 
 # Keep “hole” in session for big buttons + slider to stay in sync
 if "hole" not in st.session_state:
