@@ -6,7 +6,7 @@ st.set_page_config(page_title="Better-Ball Caddie", page_icon="⛳", layout="cen
 
 # Course / handicap config
 HOLE_HANDICAP = [15, 9, 7, 17, 1, 13, 5, 11, 3, 16, 10, 2, 18, 8, 14, 4, 6, 12]
-PAR =            [ 4, 4, 4,  3, 4,  4,  4,  3, 5,  3,  4,  4,  3, 5,  4,  4,  5,  4]
+PAR =            [ 4,  4,  4,  3, 4,  4,  4,  3, 5,  3,  4,  4,  3, 5,  4,  4,  5,  4]
 
 # Letter-grade scoring (A best → F worst)
 GRADE_TO_SCORE = {"A": 5, "B": 4, "C": 3, "D": 2, "F": 1}
@@ -33,7 +33,7 @@ def strokes_for(hcp: int, hole_index: int) -> int:
         strokes += 1
     return strokes
 
-def last(vals: List[int]|None):
+def last(vals: List[int] | None):
     return vals[-1] if vals else None
 
 def bad_streak(grades: List[int]) -> int:
@@ -46,51 +46,14 @@ def bad_streak(grades: List[int]) -> int:
             break
     return s
 
-# ---- Default per-hole strength weights (0..1) ----
-# These are placeholders; you’ll paste real numbers below in the UI to overwrite them.
-MATT_HOLE_WEIGHT = [
-    0.8, 0.5, 0.5, 0.5, 0.2, 0.5, 0.5, 0.8, 0.2,
-    0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.2, 0.8, 0.5
-]
-MIKE_HOLE_WEIGHT = [
-    0.5, 0.5, 0.8, 0.5, 0.5, 0.5, 0.5, 0.5, 0.2,
-    0.8, 0.5, 0.2, 0.5, 0.2, 0.5, 0.5, 0.8, 0.5
-]
-
-def parse_hole_values(text: str) -> List[float]:
-    """
-    Accepts 18 comma/space separated values. Returns list of 18 floats.
-    """
-    if not text.strip():
-        return []
-    # Split on commas or whitespace
-    raw = [t for chunk in text.replace(",", " ").split() for t in [chunk]]
-    vals = [float(x) for x in raw]
-    return vals
-
-def normalize_to_weights(values: List[float]) -> List[float]:
-    """
-    Normalize arbitrary per-hole numbers to 0..1 where higher = better.
-    If values are 'over par' deltas (lower is better), we invert.
-    Auto-detect by correlation: try both and pick the mapping with higher mean.
-    """
-    if len(values) != 18:
-        return []
-
-    def minmax(xs):
-        lo, hi = min(xs), max(xs)
-        if hi == lo:  # flat; return mids
-            return [0.5]*len(xs)
-        return [(x - lo) / (hi - lo) for x in xs]
-
-    # Map 1: higher→better
-    w_up   = minmax(values)
-    # Map 2: lower→better (invert)
-    w_down = [1.0 - w for w in w_up]
-
-    # Heuristic: choose mapping where the average weight is closer to 0.6 (slight optimism)
-    def score(ws): return sum(ws)/len(ws)
-    return w_up if abs(score(w_up) - 0.6) <= abs(score(w_down) - 0.6) else w_down
+# ---- Embedded per-hole strength weights (0..1; higher = stronger on that hole) ----
+# Derived from your sheet’s tendencies you described:
+# Matt best: 8, 17, 1  | worst: 9, 16, 5
+# Mike best: 10, 3, 17 | worst: 12, 9, 14
+MATT_W = [0.85, 0.55, 0.55, 0.55, 0.25, 0.40, 0.55, 0.90, 0.25,
+          0.55, 0.55, 0.55, 0.55, 0.55, 0.55, 0.30, 0.85, 0.55]
+MIKE_W = [0.55, 0.55, 0.85, 0.55, 0.55, 0.55, 0.55, 0.55, 0.30,
+          0.90, 0.55, 0.30, 0.55, 0.30, 0.55, 0.55, 0.85, 0.55]
 # === CONFIG END ===============================================================
 
 
@@ -103,17 +66,15 @@ if "hole" not in st.session_state:
     st.session_state["hole"] = 1
 hole = st.session_state["hole"]
 
-# Predeclare sidebar so recommendation can show at very top of page
+# Sidebar (so rec appears at top of page)
 with st.sidebar:
     st.subheader("Round Controls")
     # Big Prev/Next for iPhone thumb reach
     cprev, cnext = st.columns(2)
     if cprev.button("◀ Prev", use_container_width=True):
-        st.session_state["hole"] = max(1, hole - 1)
-        st.rerun()
+        st.session_state["hole"] = max(1, hole - 1); st.rerun()
     if cnext.button("Next ▶", use_container_width=True):
-        st.session_state["hole"] = min(18, hole + 1)
-        st.rerun()
+        st.session_state["hole"] = min(18, hole + 1); st.rerun()
 
     hole = st.slider("Hole", 1, 18, st.session_state["hole"])
     st.session_state["hole"] = hole
@@ -131,31 +92,10 @@ with st.sidebar:
         help="Engine pushes harder on these holes when safe."
     )
 
-    # Data intake: paste 18 values per player (from sheet, e.g., avg vs par)
-    with st.expander("Paste per-hole performance (18 values each) → smarter weights"):
-        st.markdown("**Tip:** you can paste either *avg score vs par* (lower is better) or any 18 quality ratings per hole.")
-        matt_input = st.text_area("Matt per-hole values (1–18)", value="", placeholder="e.g. 0, +1, +2, 0, +3, ...")
-        mike_input = st.text_area("Mike per-hole values (1–18)", value="", placeholder="e.g. -1, 0, +1, ...")
-        if st.button("Use pasted values", use_container_width=True):
-            try:
-                mvals = parse_hole_values(matt_input)
-                kvals = parse_hole_values(mike_input)
-                if len(mvals)==18 and len(kvals)==18:
-                    st.session_state["MATT_W"] = normalize_to_weights(mvals)
-                    st.session_state["MIKE_W"] = normalize_to_weights(kvals)
-                    st.success("Updated per-hole strengths from pasted values.")
-                else:
-                    st.error("Please provide exactly 18 numbers for each player.")
-            except Exception as e:
-                st.error(f"Could not parse values: {e}")
-
     if st.button(f"Reset Hole {hole}", key=f"reset_{hole}", use_container_width=True):
         st.session_state[f"matt_{hole}"] = []
         st.session_state[f"mike_{hole}"] = []
-
-# Pull weights (session overrides constants if present)
-MATT_W = st.session_state.get("MATT_W", MATT_HOLE_WEIGHT)
-MIKE_W = st.session_state.get("MIKE_W", MIKE_HOLE_WEIGHT)
+        st.rerun()
 
 # Per-hole state arrays
 if f"matt_{hole}" not in st.session_state: st.session_state[f"matt_{hole}"] = []
@@ -167,8 +107,8 @@ hole_idx = hole - 1
 matt_strokes = strokes_for(matt_hcp, hole_idx)
 mike_strokes = strokes_for(mike_hcp, hole_idx)
 
-# === CORE LOGIC (kept close to top so rec appears first) =====================
-def choose_attacker_candidate(m_last: int|None, k_last: int|None) -> str:
+# === CORE LOGIC (kept near top so rec shows first and updates instantly) ====
+def choose_attacker_candidate(m_last: int | None, k_last: int | None) -> str:
     """Pick attacker using last grades + per-hole strengths + bad streak penalty."""
     m_bad = bad_streak(matt_shots)
     k_bad = bad_streak(mike_shots)
@@ -201,13 +141,14 @@ def role_advice_and_rules(day2: bool, improve_list: List[int]):
     if matt_bad_run >= BAD_STREAK_THRESHOLD: rules.append(f"Matt bad streak {matt_bad_run} → no green light.")
     if mike_bad_run >= BAD_STREAK_THRESHOLD: rules.append(f"Mike bad streak {mike_bad_run} → no green light.")
 
-    # Tee order: prefer strokes/comfort to get a safe ball early
+    # Tee order: prefer strokes/comfort to secure a safe ball early
     if len(matt_shots) == 0 and len(mike_shots) == 0:
         matt_pref = (matt_strokes > mike_strokes) or (MATT_W[hole_idx] > MIKE_W[hole_idx])
         who_first = "Matt" if matt_pref else "Mike"
         rules.append(f"Tee order by strokes/comfort → {who_first} tees first.")
         smart_peek = dict(attacker=None, ev=0.0, safe="N/A", matt_w=MATT_W[hole_idx], mike_w=MIKE_W[hole_idx])
-        return (f"{who_first} tees first. First player: put a ball in play. Partner adjusts based on result.", rules, 0.0, None, smart_peek)
+        return (f"{who_first} tees first. First player: put a ball in play. Partner adjusts based on result.",
+                rules, 0.0, None, smart_peek)
 
     # One tee shot taken
     if len(matt_shots) + len(mike_shots) == 1:
@@ -335,11 +276,10 @@ def net_targets_text() -> str:
 # === TOP OUTPUT (Recommendation first) =======================================
 rec, rules, ev, attacker, peek = role_advice_and_rules(day2, improve_list)
 
-# Mobile-first: show the main call and a compact “Smart Peek” directly under it
 st.markdown("### Live Recommendation")
 st.write(rec)
 
-# Always-on mini explainability
+# Always-on mini explainability (no expand needed)
 st.caption(
     "Smart Peek · "
     f"Attacker: **{peek.get('attacker') or '—'}** · "
@@ -349,7 +289,6 @@ st.caption(
     f"{net_targets_text()}"
 )
 
-# Full explainability on demand
 with st.expander("Why this? (full explainability)"):
     st.markdown("- **Hole**: {} (Par {}, HCP {})".format(hole, PAR[hole_idx], HOLE_HANDICAP[hole_idx]))
     st.markdown("- **Matt grades**: {}".format(" ".join(SCORE_TO_GRADE[s] for s in matt_shots) or "—"))
@@ -366,8 +305,8 @@ with st.expander("Why this? (full explainability)"):
         st.markdown("  - (none yet)")
 
 st.markdown("---")
-# === SHOT ENTRY UI ===========================================================
-# Gentle CSS for bigger, spaced buttons
+
+# === SHOT ENTRY UI (buttons call st.rerun for instant top update) ===========
 st.markdown("""
 <style>
 .grade-grid {display:grid; grid-template-columns:repeat(5,1fr); gap:10px;}
@@ -380,7 +319,7 @@ with c1:
     st.markdown('<div class="grade-grid">', unsafe_allow_html=True)
     for g in ["A","B","C","D","F"]:
         if st.button(g, key=f"matt_{hole}_{g}", help=GRADE_HELP[g], use_container_width=True):
-            matt_shots.append(GRADE_TO_SCORE[g])
+            matt_shots.append(GRADE_TO_SCORE[g]); st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
     st.write("Matt shots:", " ".join(SCORE_TO_GRADE[s] for s in matt_shots) or "—")
 
@@ -389,7 +328,7 @@ with c2:
     st.markdown('<div class="grade-grid">', unsafe_allow_html=True)
     for g in ["A","B","C","D","F"]:
         if st.button(g, key=f"mike_{hole}_{g}", help=GRADE_HELP[g], use_container_width=True):
-            mike_shots.append(GRADE_TO_SCORE[g])
+            mike_shots.append(GRADE_TO_SCORE[g]); st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
     st.write("Mike shots:", " ".join(SCORE_TO_GRADE[s] for s in mike_shots) or "—")
 
