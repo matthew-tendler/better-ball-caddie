@@ -294,18 +294,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown('<div class="sticky-reco">', unsafe_allow_html=True)
-st.markdown("### Live Recommendation")
-st.write(rec)
-st.caption(
-    "Smart Peek · "
-    f"Attacker: **{peek.get('attacker') or '—'}** · "
-    f"EV(Attack−Anchor): **{peek.get('ev'):+.2f}** · "
-    f"Safe ball: **{peek.get('safe')}** · "
-    f"Hole strength — Matt **{peek.get('matt_w'):.2f}**, Mike **{peek.get('mike_w'):.2f}** · "
-    f"{net_targets_text()}"
-)
-st.markdown('</div>', unsafe_allow_html=True)
+
 
 with st.expander("Why this? (full explainability)"):
     st.markdown("- **Hole**: {} (Par {}, HCP {})".format(hole, PAR[hole_idx], HOLE_HANDICAP[hole_idx]))
