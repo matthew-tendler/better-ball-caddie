@@ -295,7 +295,9 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
+
 st.markdown('<div class="sticky-reco">', unsafe_allow_html=True)
+st.markdown(f"**Hole {hole}** (Par {PAR[hole_idx]}, HCP {HOLE_HANDICAP[hole_idx]})")
 st.markdown("### Live Recommendation")
 st.write(rec)
 st.caption(net_targets_text())
@@ -321,7 +323,7 @@ st.markdown("---")
 # === SHOT ENTRY UI (buttons call st.rerun for instant top update) ===========
 c1, c2 = st.columns(2, gap="large")
 with c1:
-    st.markdown("### Matt — grade this shot")
+    st.markdown("### Matt — grade your last shot")
     st.markdown('<div class="grade-grid">', unsafe_allow_html=True)
     for g in ["A","B","C","D","F"]:
         if st.button(g, key=f"matt_{hole}_{g}", help=GRADE_HELP[g], use_container_width=True):
@@ -330,7 +332,7 @@ with c1:
     st.write("Matt shots:", " ".join(SCORE_TO_GRADE[s] for s in matt_shots) or "—")
 
 with c2:
-    st.markdown("### Mike — grade this shot")
+    st.markdown("### Mike — grade your last shot")
     st.markdown('<div class="grade-grid">', unsafe_allow_html=True)
     for g in ["A","B","C","D","F"]:
         if st.button(g, key=f"mike_{hole}_{g}", help=GRADE_HELP[g], use_container_width=True):
