@@ -61,6 +61,18 @@ MIKE_W = [0.55, 0.55, 0.85, 0.55, 0.55, 0.55, 0.55, 0.55, 0.30,
 st.title("Better-Ball Caddie for MKCC")
 st.caption("Grade each shot A/B/C/D/F. Live tactics are handicap-aware and hole-smart.")
 
+with st.expander("How to use this app"):
+    st.markdown("""
+    Grade each shot for both players using the A/B/C/D/F buttons below. The app instantly gives live, hole-specific recommendations for your team, factoring in:
+    - **Handicaps** and per-hole stroke allocation
+    - **Per-hole strengths** for each player (based on your tendencies)
+    - **Recent shot grades** (bad streaks trigger damage control)
+    - **Day-2 Ringer mode** for extra aggression on holes you want to improve
+    - **Who is safe** after each shot, and who should attack or anchor
+
+    The advice updates after every shot, helping you optimize team strategy in real time.
+    """)
+
 # Keep “hole” in session for big buttons + slider to stay in sync
 if "hole" not in st.session_state:
     st.session_state["hole"] = 1
@@ -303,19 +315,6 @@ st.write(rec)
 st.caption(net_targets_text())
 st.markdown('</div>', unsafe_allow_html=True)
 st.markdown("---")
-
-st.markdown("""
-#### How to Use
-Grade each shot for both players using the A/B/C/D/F buttons below. The app instantly gives live, hole-specific recommendations for your team, factoring in:
-- **Handicaps** and per-hole stroke allocation
-- **Per-hole strengths** for each player (based on your tendencies)
-- **Recent shot grades** (bad streaks trigger damage control)
-- **Day-2 Ringer mode** for extra aggression on holes you want to improve
-- **Who is safe** after each shot, and who should attack or anchor
-
-The advice updates after every shot, helping you optimize team strategy in real time.
-""")
-
 st.markdown("---")
 
 c1, c2 = st.columns(2, gap="large")
